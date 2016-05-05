@@ -265,7 +265,7 @@ check_args () {
                 exit 0
                 ;;
 
-   sync-all)    check_any_dirty 
+    sync-all)   check_any_dirty 
                 concurrently_sync_repos $@;
                 exit 0
                 ;;
@@ -297,45 +297,24 @@ check_args () {
 
 show_help () {
   cat <<-EOF
-
     Usage:
-
-      $ ./repos-manager.sh <organization> [cmd] [args]
+      $ ./repos-manager.sh <cmd> [args]
 
 
     Commands:
       show              shows repositories and their respective vers, 
                         i.e, their HEADS.
 
-      fetch             fetches latest revisions of each repository
-
-      sync-all          for every repository, goes to master, fetches fromm
-                        upstream and  then performs a rebase.
-
-      checkout <tag>    performs a 'git-checkout' to a given tag.
-
       clone [--shallow] clones all repositories to {ORGANIZATION}_TIMESTAMP. 
                         If "--shallow", then performs a shallow clone 
                         (depth: 1).
 
+      sync-all          for every repository, goes to master, fetches fromm
+                        upstream and  then performs a rebase.
 
-    Example:
-      Assuming repo{A,B,C,D} are not dirty (no uncommited changes, for instance),
-      and that:
+      fetch             (EXPERIMENTAL) fetches latest revisions of each repository
 
-        repoA is on #master,  has tags [v1.0.0-alpha3.1, v1.0.0-alpha3]
-        repoB is on #tests2,  has tags [v1.0.0-alpha3.1, v1.0.0-alpha3.1.1]
-        repoC is on #1h23j1,  has tags [v1.0.0-alpha3]
-        repoD is on v1.0.0-alpha3,  has tags [v1.0.0-alpha3]
-
-      then:
-
-        $ ./repos-manager.sh checkout v1.0.0-alpha.3
-
-          > repoA:    master        -> v1.0.0-alpha3
-          > repoB:    tests2        -> v1.0.0-alpha3
-          > repoC:    master        -> v1.0.0-alpha3
-          > repoD:    v1.0.0-alpha3 -> v1.0.0-alpha3
+      checkout <tag>    (EXPERIMENTAL) performs a 'git-checkout' to a given tag.
 
 EOF
 }
