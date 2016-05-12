@@ -56,6 +56,21 @@ Example:
 
 ```
 
+## Autocompletition
+
+To autocomplete on `TAB` pressing you have to add either add `repos-manager/autocomplete` directory to `fpath` in `~/.zshrc` add the `autocomplete/_repos-manager` zsh script to one of zsh's autocomplete functions directories.
+
+For example:
+
+  ```zsh
+  # in ~/.zshrc
+
+  repos_manager_dir=$(readlink $(which repos-manager))
+  fpath=($repos_manager_dir/autocomplete/ $fpath)
+  compinit      # supposing you don't call a oh-my-zsh
+                # function that ends up calling compinit
+  ```
+
 ## LICENSE
 
 MPLv2 ( Mozilla Public License 2)
