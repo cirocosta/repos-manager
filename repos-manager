@@ -254,6 +254,29 @@ checkout_to_tag () {
   popd
 }
 
+get_completion_path () {
+  local dir=$(dirname $(readlink "${BASH_SOURCE[0]}"))/autocomplete/completion.sh
+  echo $dir
+}
+
+get_completion_to_word () {
+  local readonly commands="show clone sync-all fetch checkout"
+  local readonly prefix=$@
+  local matches;
+
+  if [[ -z $prefix ]]; then
+    for cmd in $commands; do echo $cmd; done
+    exit 0
+  fi
+
+  for cmd in $commands; do
+    if [[ $cmd = $prefix* ]]; then
+      echo $cmd
+    fi
+  done
+}
+
+
 check_args () {
   if [[ $# -lt 1 ]]; then
     show_help
@@ -288,6 +311,14 @@ check_args () {
                 concurrently_fetch_repos
                 ;;
 
+    complpath)  get_completion_path 
+                exit 0
+                ;;
+
+    compl)      shift
+                get_completion_to_word "$@"
+                exit 0
+                ;;
 
     *)          show_help
                 exit 1
