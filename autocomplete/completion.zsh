@@ -1,12 +1,7 @@
 #!/bin/zsh
 
-_repos-manager () {
-  local word completions
+autoload -U compinit && compinit
+autoload -U bashcompinit && bashcompinit
 
-  word="$1"
-  completions=$(repos-manager compl "${word}")
-  reply=( "${(ps:\n:)completions}" )
-}
-
-compctl -K _repos-manager repos-manager
-
+local dir=$(dirname $0)
+. ${dir}/completion.bash

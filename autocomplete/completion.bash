@@ -1,11 +1,13 @@
 #!/bin/bash
 
 _repos-manager () {
-  COMPREPLY=()
-  local word="${COMP_WORDS[COMP_CWORD]}"
-  local completitions=$(repos-manager compl $word)
+  local input completions
 
-  COMPREPLY=( $(compgen -W "$completitions" -- "$word"  )
+  COMPREPLY=()
+  input="${COMP_WORDS[COMP_CWORD]}"
+  completions=$(repos-manager compl "$input")
+
+  COMPREPLY=( $(compgen -W "$completions" -- "$input") )
 }
 
 complete -F _repos-manager repos-manager
