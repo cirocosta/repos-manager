@@ -254,6 +254,36 @@ checkout_to_tag () {
   popd
 }
 
+get_completion_path () {
+  local dir=$(dirname $(readlink "${BASH_SOURCE[0]}"))/autocomplete
+  echo $dir
+}
+
+get_completion_to_word () {
+  local readonly commands=(
+    "show: show repos and their respective vers"
+    "clone: clones all registered repos"
+    "sync-all: fetches all repos HEAD and rebase"
+  )
+  local readonly prefix=$@
+  local matches;
+
+  IFS=$'\n'
+  if [[ -z $prefix ]]; then
+    for cmd in ${commands[@]}; do echo $cmd; done
+    exit 0
+  fi
+
+  for cmd in $commands; do
+    local cmd_name=$(cut -d ":" -f 1 <<< $cmd)
+
+    if [[ ${cmd_name} == $prefix* ]]; then
+      echo $cmd
+    fi
+  done
+}
+
+
 check_args () {
   if [[ $# -lt 1 ]]; then
     show_help
@@ -288,6 +318,14 @@ check_args () {
                 concurrently_fetch_repos
                 ;;
 
+    complpath)  get_completion_path 
+                exit 0
+                ;;
+
+    compl)      shift
+                get_completion_to_word "$@"
+                exit 0
+                ;;
 
     *)          show_help
                 exit 1
