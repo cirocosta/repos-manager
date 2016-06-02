@@ -10,10 +10,7 @@
 
 _repos-manager () {
   local -a commands
-  commands=(
-    'show:shows repositories statuses'
-    'sync-all:sync with upstreams master'
-  )
+  commands=("${(@f)$(repos-manager compl "$input")}")
 
   if (( CURRENT == 2)); then
     _describe -t commands 'commands' commands

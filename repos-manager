@@ -255,22 +255,29 @@ checkout_to_tag () {
 }
 
 get_completion_path () {
-  local dir=$(dirname $(readlink "${BASH_SOURCE[0]}"))/autocomplete/completion.sh
+  local dir=$(dirname $(readlink "${BASH_SOURCE[0]}"))/autocomplete
   echo $dir
 }
 
 get_completion_to_word () {
-  local readonly commands="show clone sync-all fetch checkout"
+  local readonly commands=(
+    "show: show repos and their respective vers"
+    "clone: clones all registered repos"
+    "sync-all: fetches all repos HEAD and rebase"
+  )
   local readonly prefix=$@
   local matches;
 
+  IFS=$'\n'
   if [[ -z $prefix ]]; then
-    for cmd in $commands; do echo $cmd; done
+    for cmd in ${commands[@]}; do echo $cmd; done
     exit 0
   fi
 
   for cmd in $commands; do
-    if [[ $cmd = $prefix* ]]; then
+    local cmd_name=$(cut -d ":" -f 1 <<< $cmd)
+
+    if [[ ${cmd_name} == $prefix* ]]; then
       echo $cmd
     fi
   done
