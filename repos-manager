@@ -1,9 +1,52 @@
 #!/bin/bash
 
-set -euo pipefail
+set -eo pipefail
 
 readonly CONFIG_FROM_HOME="${HOME}/.repos-managerrc"
 readonly CONFIG_FROM_PWD="${PWD}/.repos-managerrc"
+REPOSITORIES_NAMES=()
+
+main () {
+  source $(get_configuration)
+  prepare_repo_names_list
+  check_args "$@"
+}
+
+check_args () {
+  if [[ $# -lt 1 ]]; then
+    show_help
+    exit 1
+  fi
+
+  case $1 in
+    show)       show_versions_serially
+                exit 0
+                ;;
+
+    sync-all)   check_any_dirty 
+                concurrently_sync_repos
+                exit 0
+                ;;
+
+    clone)      concurrently_clone
+                exit 0
+                ;;
+
+    complpath)  get_completion_path 
+                exit 0
+                ;;
+
+    compl)      shift
+                get_completion_to_word "$@"
+                exit 0
+                ;;
+
+    *)          show_help
+                exit 1
+                ;;
+  esac
+}
+
 
 get_configuration () {
   local cfg; 
@@ -22,106 +65,61 @@ get_configuration () {
   echo $cfg
 }
 
-
 concurrently_clone () {
-  local shallow=$@
-  local tmp_ifs=$IFS
-  local FAIL=0
-  local pidlist;
-  local clone_args;
+  for repo in ${REPOSITORIES[@]}; do
+		local full_repo_ref=$repo
+		local branch=$(echo $full_repo_ref | awk -F'#' '{print $2}')
+		local full_repo=$(echo $full_repo_ref | awk -F'#' '{print $1}')
+		local repo_name=$(echo $full_repo | awk -F'/' '{print $2}')
+		local git_url="https://github.com/${full_repo}"
 
-  [[ -n $shallow ]] && clone_args="--depth 1"
-
-  pushd .
-  mkdir "${ORGANIZATION}_$(unix_timestamp)" && cd $_
-
-  for repo in ${REPOS[@]}; do
-    git clone $clone_args git@github.com:${ORGANIZATION}/${repo}.git & pidlist="$pidlist $!"
+		clone_repo_and_use_branch $git_url $branch $repo_name &
   done
+  wait
+}
 
-  IFS=$' '
-  for pid in $pidlist; do
-    wait $pid || let "FAIL += 1"
-  done
+clone_repo_and_use_branch () {
+  local repo_url=$1
+  local branch=$2
+  local repo_name=$3
 
-  if [[ $FAIL -ne 0 ]]; then
-    echo "Failed: ${FAIL}" 
-    exit 1
+  echo "Cloning ${repo_name}#${branch}"
+
+  git clone $repo_url
+
+  cd $repo_name
+  git remote add upstream $repo_url
+
+  if [[ $branch != "master" ]]; then
+    git checkout -q $branch
   fi
-
-  IFS=$tmp_ifs
-
-  popd
 }
 
 concurrently_sync_repos () {
-  local tmp_ifs=$IFS
-  local FAIL=0
-  local pidlist;
-
-  for repo in ${REPOS[@]}; do
-    sync_repo $repo & pidlist="$pidlist $!"
+  for repo in ${REPOSITORIES_NAMES[@]}; do
+    sync_repo $repo &
   done
-
-  IFS=$' '
-  for pid in $pidlist; do
-    wait $pid || let "FAIL += 1"
-  done
-
-  if [[ $FAIL -ne 0 ]]; then
-    echo "Failed: ${FAIL}" 
-    exit 1
-  fi
-
-  IFS=$tmp_ifs
-}
-
-concurrently_fetch_repos () {
-  local tmp_ifs=$IFS
-  local FAIL=0
-  local pidlist;
-
-  for repo in ${REPOS[@]}; do
-    fetch_repo $repo & pidlist="$pidlist $!"
-  done
-
-  IFS=$' '
-  for pid in $pidlist; do
-    wait $pid || let "FAIL += 1"
-  done
-
-  if [[ $FAIL -ne 0 ]]; then
-    echo "Failed: ${FAIL}" 
-    exit 1
-  fi
-
-  IFS=$tmp_ifs
+  wait
 }
 
 sync_repo () {
-  local latest=master
   local repo=$1
 
   cd $repo
   git checkout -q master
-  git::add_upstream $repo
-  git fetch -q $REMOTE 
-  git rebase -q upstream/master
+  git fetch -q upstream 
 
-  printf "%20s synced\n" $repo
-}
+  if [[ $(git rev-parse HEAD) != $(git rev-parse @{u}) ]]; then
+    git rebase -q upstream/master
+    printf "%20s | New Updates\n" $repo
+    return 0
+  fi
 
-fetch_repo () {
-  local latest=master
-  local repo=$1
-
-  cd $repo
-  git::add_upstream $repo
-  git fetch -q $REMOTE
+  printf "%20s | Already Updated\n" $repo
 }
 
 check_any_dirty () {
-  for repo in ${REPOS[@]}; do
+  for repo in ${REPOSITORIES_NAMES[@]}; do
     [[ -d $repo ]] || (print::single_bold "$repo" "is missing."; exit 1)
 
     pushd .
@@ -136,22 +134,10 @@ check_any_dirty () {
   done
 }
  
-
-git::add_upstream () {
-  local repo=$1
-
-  if ! (git remote | grep $REMOTE > /dev/null); then
-    git remote add $REMOTE git@github.com:${ORGANIZATION}/${repo}.git
-  fi
-}
-
 git::pretty_version () {
-  local repo=$1
-
   local branch=`git symbolic-ref --short -q HEAD`
   local sha=`git rev-parse HEAD`
-  local tag=$(git tag --points-at $sha)
-  local ver=$([[ $tag ]] && echo "$tag" || echo "${branch}#${sha}")
+  local ver="${branch}#${sha}"
 
   echo ${ver::20}
 }
@@ -164,6 +150,23 @@ git::is_dirty() {
   fi
 }
 
+prepare_repo_names_list () {
+  REPOSITORIES_NAMES=()
+
+  for repo in ${REPOSITORIES[@]}; do
+    local repo_name=$(echo $repo | cut -d "/" -f 2 | cut -d "#" -f 1)
+    REPOSITORIES_NAMES+=($repo_name)
+  done
+}
+
+show_versions_serially () {
+  print::row::bold REPOSITORY VERSION DIRTY
+  print::row::bold ---------- ------- -----
+
+  for repo in ${REPOSITORIES_NAMES[@]}; do
+    show_version $repo
+  done
+}
 
 show_version () {
   local repo=$1
@@ -187,73 +190,6 @@ show_version () {
   popd
 }
 
-show_versions_serially () {
-  echo 
-  print::row::bold REPOSITORY VERSION DIRTY
-  print::row::bold ---------- ------- -----
-
-  for repo in ${REPOS[@]}; do
-    show_version $repo
-  done
-
-  echo
-}
-
-checkout_all () {
-  local tag=$1
-
-  print::row::bold REPOSITORY FROM TO
-  print::row::bold ---------- ---- --
-
-  if [[ $tag = "master" ]]; then 
-    for repo in ${REPOS[@]}; do checkout_to_master $repo; done
-  else
-    for repo in ${REPOS[@]}; do checkout_to_tag $repo $tag; done
-  fi
-}
-
-checkout_to_master () {
-  local repo=$1
-
-  pushd .
-  cd $repo
-  local last_ver=$(git::pretty_version $repo)
-
-  git checkout -q master
-
-  local current_ver=$(git::pretty_version $repo)
-  print::row $repo $last_ver $current_ver
-
-  popd
-}
-
-# `checkout`s to a given tag. 
-#
-#   If the tag is not found, tries to fetch new tags
-#   and then tries again. If it doesn't find, stays
-#   in the same revision
-checkout_to_tag () {
-  local repo=$1
-  local tag=$2
-
-  pushd .
-  cd $repo
-  local last_ver=$(git::pretty_version $repo)
-
-  if ! git rev-parse $tag >/dev/null 2>&1; then
-    git fetch -q --tags 
-  fi
-
-  if ! git rev-parse $tag >/dev/null 2>&1; then
-    print::row::bold $repo $last_ver $last_ver
-  else
-    git checkout $tag
-    print::row::bold $repo $last_ver $tag
-  fi
-
-  popd
-}
-
 get_completion_path () {
   local dir=$(dirname $(readlink "${BASH_SOURCE[0]}"))/autocomplete
   echo $dir
@@ -271,7 +207,7 @@ get_completion_to_word () {
   IFS=$'\n'
   if [[ -z $prefix ]]; then
     for cmd in ${commands[@]}; do echo $cmd; done
-    exit 0
+    return 0
   fi
 
   for cmd in $commands; do
@@ -284,55 +220,6 @@ get_completion_to_word () {
 }
 
 
-check_args () {
-  if [[ $# -lt 1 ]]; then
-    show_help
-    exit 1
-  fi
-
-  case $1 in
-    show)       show_versions_serially
-                exit 0
-                ;;
-
-    sync-all)   check_any_dirty 
-                concurrently_sync_repos $@;
-                exit 0
-                ;;
-
-    clone)      shift
-                concurrently_clone $@;
-                exit 0
-                ;;
-
-    checkout)   if [[ -z $2 ]]; then
-                  echo "Error: A <tag> must be specified." 
-                  exit 1
-                fi
-                check_any_dirty 
-                checkout_all $2
-                ;;
-
-
-    fetch)      check_any_dirty 
-                concurrently_fetch_repos
-                ;;
-
-    complpath)  get_completion_path 
-                exit 0
-                ;;
-
-    compl)      shift
-                get_completion_to_word "$@"
-                exit 0
-                ;;
-
-    *)          show_help
-                exit 1
-                ;;
-  esac
-}
-
 show_help () {
   cat <<-EOF
     Usage:
@@ -343,17 +230,10 @@ show_help () {
       show              shows repositories and their respective vers, 
                         i.e, their HEADS.
 
-      clone [--shallow] clones all repositories to {ORGANIZATION}_TIMESTAMP. 
-                        If "--shallow", then performs a shallow clone 
-                        (depth: 1).
+      clone             clones all repositories to {ORGANIZATION}_TIMESTAMP. 
 
       sync-all          for every repository, goes to master, fetches fromm
                         upstream and  then performs a rebase.
-
-      fetch             (EXPERIMENTAL) fetches latest revisions of each repository
-
-      checkout <tag>    (EXPERIMENTAL) performs a 'git-checkout' to a given tag.
-
 EOF
 }
 
@@ -364,24 +244,22 @@ show_config_help () {
     directory or at 'HOME'. The configuration file must define the 
     following variables:
 
-      - ORGANIZATION    name of the organization that holds the repos
-
-      - REMOTE          name of the remote to fetch the repositories
-                        (so that you can keep your 'origin' to the
-                        fork
-
-      - REPOS           array of repositories to perform actions on
-
-
+      - REPOITORIES     array of repositories to perform actions on.
+                           
+                          Format: organization_or_user/name#branch
+                          Example: cirocosta/repos-manager#master
+                          
   Example:
     configuration file '{HOME}/Development/myorg/.repos-managerrc':
     
       '''
       #!/bin/bash
 
-      readonly ORGANIZATION='myorg'
-      readonly REMOTE='upstream'
-      readonly REPOS=("repo1" "repo2" "repo3")
+      readonly REPOSITORIES=(
+        "repo1" 
+        "repo2" 
+        "repo3"
+      )
       '''
 EOF
 }
@@ -406,33 +284,6 @@ print::row::bold () {
 
 print::row () {
   printf "%20s : %22s : %8s\n" $1 $2 $3
-}
-
-unix_timestamp () {
-  echo "$(date +%s)"
-}
-
-random_string () {
-  local length=$1
-  local string;
-  readonly alphabet='abcdefghijklmnopqrstuvwxyz'
-  
-  echo $length
-  
-  for i in `seq 1 $length`; do
-    string="${string}$(_choose alphabet)"
-  done
-
-  echo $string
-}
-
-_choose () {
-  echo ${1:RANDOM%${#1}:1}
-}
-
-main () {
-  source $(get_configuration)
-  check_args "$@"
 }
 
 main "$@"
