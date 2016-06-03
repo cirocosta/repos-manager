@@ -7,6 +7,10 @@ readonly CONFIG_FROM_PWD="${PWD}/.repos-managerrc"
 REPOSITORIES_NAMES=()
 
 main () {
+  local cfg=$(get_configuration)
+
+  [[ -z $cfg ]] && exit 1
+
   source $(get_configuration)
   prepare_repo_names_list
   check_args "$@"
@@ -57,7 +61,7 @@ get_configuration () {
     if [[ -f $CONFIG_FROM_HOME ]]; then
       cfg=$CONFIG_FROM_HOME
     else
-      show_config_help
+      show_config_help >&2
       exit 1
     fi
   fi
@@ -67,13 +71,13 @@ get_configuration () {
 
 concurrently_clone () {
   for repo in ${REPOSITORIES[@]}; do
-		local full_repo_ref=$repo
-		local branch=$(echo $full_repo_ref | awk -F'#' '{print $2}')
-		local full_repo=$(echo $full_repo_ref | awk -F'#' '{print $1}')
-		local repo_name=$(echo $full_repo | awk -F'/' '{print $2}')
-		local git_url="https://github.com/${full_repo}"
+    local full_repo_ref=$repo
+    local branch=$(echo $full_repo_ref | awk -F'#' '{print $2}')
+    local full_repo=$(echo $full_repo_ref | awk -F'#' '{print $1}')
+    local repo_name=$(echo $full_repo | awk -F'/' '{print $2}')
+    local git_url="https://github.com/${full_repo}"
 
-		clone_repo_and_use_branch $git_url $branch $repo_name &
+    clone_repo_and_use_branch $git_url $branch $repo_name &
   done
   wait
 }
@@ -221,7 +225,7 @@ get_completion_to_word () {
 
 
 show_help () {
-  cat <<-EOF
+  cat <<-EOF >&2
     Usage:
       $ ./repos-manager.sh <cmd> [args]
 
@@ -244,7 +248,7 @@ show_config_help () {
     directory or at 'HOME'. The configuration file must define the 
     following variables:
 
-      - REPOITORIES     array of repositories to perform actions on.
+      - REPOSITORIES     array of repositories to perform actions on.
                            
                           Format: organization_or_user/name#branch
                           Example: cirocosta/repos-manager#master

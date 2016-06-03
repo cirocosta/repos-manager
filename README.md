@@ -4,6 +4,17 @@
 
 `repos-manager` was built to solve the problem of keeping several repositories in sync. 
 
+## Install
+
+  ```sh
+  # clone the repo
+  git clone https://github.com/cirocosta/repos-manager
+  cd repos-manager
+
+  # install
+  ./install.sh
+  ```
+
 ## Usage
 
 ```
@@ -35,13 +46,7 @@ Commands:
 directory or at 'HOME'. The configuration file must define the 
 following variables:
 
-  - ORGANIZATION    name of the organization that holds the repos
-
-  - REMOTE          name of the remote to fetch the repositories
-                    (so that you can keep your 'origin' to the
-                    fork
-
-  - REPOS           array of repositories to perform actions on
+  - REPOSITORIES    array of repositories to perform actions on
 
 
 Example:
@@ -50,10 +55,10 @@ Example:
     '''
     #!/bin/bash
 
-    readonly ORGANIZATION='myorg'
-    readonly REMOTE='upstream'
-    readonly REPOS=("repo1" "repo2" "repo3")
-
+    readonly REPOSITORIES=(
+      "org/repo1#version" 
+      "org2/repo2#master" 
+    )
 ```
 
 ## Autocompletition
